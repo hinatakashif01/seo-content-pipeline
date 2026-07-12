@@ -1,0 +1,651 @@
+{
+  "name": "SEO Content Pipeline (sanitized)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Article Generation Request",
+        "formDescription": "Generates a structured, publish-ready long-form article.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Topic",
+              "placeholder": "What should the article be about?",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Primary Keyword",
+              "placeholder": "Main SEO keyword",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Target Audience",
+              "placeholder": "Who is this for?",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Tone",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Editorial"
+                  },
+                  {
+                    "option": "Persuasive"
+                  },
+                  {
+                    "option": "Explanatory"
+                  },
+                  {
+                    "option": "Concise"
+                  },
+                  {
+                    "option": "Conversational"
+                  },
+                  {
+                    "option": "Structured"
+                  },
+                  {
+                    "option": "Direct"
+                  },
+                  {
+                    "option": "Custom"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Article Length (Words)",
+              "fieldType": "number",
+              "placeholder": "e.g. 2600",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Opener Type",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Pain Promise"
+                  },
+                  {
+                    "option": "Myth Bust"
+                  },
+                  {
+                    "option": "Diagnostic"
+                  },
+                  {
+                    "option": "Example First"
+                  },
+                  {
+                    "option": "Story"
+                  },
+                  {
+                    "option": "Outcome Led"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "What are you trying to convey in the article?",
+              "fieldType": "textarea",
+              "placeholder": "As much detail as you can.",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Additional Notes",
+              "fieldType": "textarea",
+              "placeholder": "Optional. If Tone = Custom, describe the style here.",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -780,
+        -110
+      ],
+      "name": "On form submission"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// ---- Tone instructions ----\nconst tones = {\n  direct:         \"Direct: action-first. Short sentences. No filler, no hedging. What to do, what to avoid, why it matters.\",\n  structured:     \"Structured: playbook format. Ordered sections, numbered steps, repeatable frameworks.\",\n  conversational: \"Conversational: natural, confident, plain language, second-person address.\",\n  concise:        \"Concise: executive style. Minimal narrative. Decisions and outcomes only.\",\n  explanatory:    \"Explanatory: teach-first. Clear explanation, then a concrete worked example.\",\n  persuasive:     \"Persuasive: argument-driven. Make a claim, justify it, lead the reader to a conclusion.\",\n  editorial:      \"Editorial: polished longform. Smooth transitions, strong narrative flow.\",\n  custom:         \"Custom: follow the user's described style exactly, respecting all structural rules.\"\n};\n\n// ---- Opener instructions ----\n// FIX: keys must match normalize(<form dropdown option>) exactly.\n// Previously \"Pain Promise\" -> \"pain_promise\" missed the key\n// \"direct_pain_promise\", and \"Story\" had no key at all, so every\n// Story request silently rendered as a Pain Promise opener.\nconst openers = {\n  pain_promise:  \"Pain -> promise: name the reader's blockage, then promise the outcome. 'If you're stuck at X, this shows Y.'\",\n  myth_bust:     \"Myth bust: state what most people believe (X), then reframe with the real lever (Y).\",\n  diagnostic:    \"Diagnostic: open with questions that let the reader locate their own situation, then give the matching play.\",\n  example_first: \"Example-first: open with a finished output, then reverse-engineer how to produce it.\",\n  story:         \"Story: open with a short, specific anecdote (2-4 sentences) that dramatises the core problem. No fabricated people or events.\",\n  outcome_led:   \"Outcome-led: state exactly what the reader will hold at the end: checklists, templates, targets.\"\n};\n\nfunction normalize(v) {\n  return (v || \"\").toLowerCase().trim().replace(/\\s+/g, \"_\");\n}\n\nconst toneKey   = normalize(item[\"Tone\"]);\nconst openerKey = normalize(item[\"Opener Type\"]);\n\n// FIX: form field is \"Additional Notes\" and must exist on the form,\n// otherwise the custom-tone branch is unreachable dead code.\nconst notes = item[\"Additional Notes\"] || \"\";\n\nlet resolvedTone = tones[toneKey] || tones.direct;\nif (toneKey === \"custom\" && notes.trim() !== \"\") {\n  resolvedTone = notes;\n}\n\nconst resolvedOpener = openers[openerKey] || openers.pain_promise;\n\n// FIX: fail loudly instead of silently degrading.\nif (!openers[openerKey]) {\n  console.warn(`Unmapped opener \"${item[\"Opener Type\"]}\" -> \"${openerKey}\". Falling back to pain_promise.`);\n}\nif (!tones[toneKey]) {\n  console.warn(`Unmapped tone \"${item[\"Tone\"]}\" -> \"${toneKey}\". Falling back to direct.`);\n}\n\nitem.instructions = {\n  writing_style: resolvedTone,\n  opener: resolvedOpener\n};\n\nreturn $input.all();\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -110
+      ],
+      "name": "Resolve Tone & Opener"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_MODEL"
+        },
+        "options": {
+          "timeout": 500000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -340,
+        110
+      ],
+      "name": "Outline Model"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.submittedAt }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -180,
+        110
+      ],
+      "name": "Outline Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are producing an OUTLINE ONLY for a publish-ready long-form article.\n\nInputs:\n- Topic: {{ $json.Topic }}\n- Goal: {{ $json['What are you trying to convey in the article?'] }}\n- Primary keyword: {{ $json['Primary Keyword'] }}\n- Target audience: {{ $json['Target Audience'] }}\n- Tone: {{ $json.instructions.writing_style }}\n- Length target: {{ $json['Article Length (Words)'] }} words\n- Opener (introduction ONLY): {{ $json.instructions.opener }}\n- Additional notes (may be empty): {{ $json['Additional Notes'] }}\n\nFORMAT RULES (HARD)\n- Markdown only.\n- No raw URLs anywhere.\n- No citations or [[Source: ...]] patterns.\n\nMANDATORY EARLY HEADINGS (verbatim, in this order)\n1) TL;DR\n2) Who this is for\n3) Outcomes\n4) Table of Contents\n\nSECTION SPINE (verbatim, in this order, no renaming)\n1) Setup\n2) Step-by-step\n3) Examples/Templates\n4) Mistakes\n5) Metrics\n6) Troubleshooting\n7) Next Steps (7-day plan)\n8) Direct answer\n9) Decision tree\n10) FAQ\n11) If you only do 3 things...\n12) Further Reading\n\nSECTION CONSTRAINTS\n- Examples/Templates: at least 3 subsections labelled exactly \"Template: [Name]\"\n- Mistakes: must plan for \"Common mistake:\" callouts\n- Metrics: 3-7 KPIs, each planned as KPI -> Target -> If low -> Action\n- Troubleshooting: if/then logic\n- FAQ: 6-10 questions\n- Further Reading: 5 items maximum\n\nCALLOUTS the final draft must satisfy (plan for them here)\n- 6 or more \"Rule:\" callouts\n- 6 or more \"Common mistake:\" callouts\n- 4 or more \"Insight:\" callouts\n\nFAIL CONDITIONS\n- Any required heading missing or renamed\n- Headings out of order\n- Fewer than 12 major sections\n- Templates not labelled \"Template: ...\"\n- Metrics not structured as KPI -> Target -> Action\n\nReturn the outline only. Bullets, not prose.\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -320,
+        -110
+      ],
+      "name": "Generate Outline",
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_MODEL"
+        },
+        "builtInTools": {
+          "webSearch": {
+            "searchContextSize": "medium"
+          }
+        },
+        "options": {
+          "timeout": 500000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        60,
+        110
+      ],
+      "name": "Draft Model (web search)",
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('On form submission').item.json.submittedAt }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        200,
+        110
+      ],
+      "name": "Draft Memory"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"article_title\": {\n      \"type\": \"string\"\n    },\n    \"article\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"article_title\",\n    \"article\"\n  ],\n  \"additionalProperties\": false\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        340,
+        110
+      ],
+      "name": "Article Schema"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_MODEL"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        420,
+        300
+      ],
+      "name": "Fixer Model"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a publish-ready long-form article. The outline is a GUIDELINE, not a straitjacket.\n\nInputs:\n- Outline: {{ $json.output }}\n- Topic: {{ $('On form submission').item.json.Topic }}\n- Goal: {{ $('On form submission').item.json['What are you trying to convey in the article?'] }}\n- Primary keyword: {{ $('On form submission').item.json['Primary Keyword'] }}\n- Target audience: {{ $('On form submission').item.json['Target Audience'] }}\n- Tone: {{ $('Resolve Tone & Opener').item.json.instructions.writing_style }}\n- Opener (introduction ONLY): {{ $('Resolve Tone & Opener').item.json.instructions.opener }}\n- Length target: {{ $('On form submission').item.json['Article Length (Words)'] }} words\n- Additional notes: {{ $('On form submission').item.json['Additional Notes'] }}\n\nYou MAY rename, merge or reorder sections where it improves flow for this topic.\nYou MAY NOT drop a required content block.\n\nFORMAT RULES (HARD)\n- Markdown only. No code fences, no HTML.\n- Short paragraphs, 3-4 lines maximum.\n- Second person (\"you\").\n- Mentor tone: confident, tactical, honest.\n\nLINKS (this rule replaces the old contradictory one)\n- No URLs in the body of the article.\n- URLs are permitted ONLY inside the \"Further Reading\" section, 5 items maximum.\n- If you use web search, cite what you found ONLY in Further Reading. Never inline.\n- Never invent a source. If you cannot verify it, leave it out.\n\nINTRODUCTION\n- 120-220 words.\n- Primary keyword appears early.\n- Apply ONLY the supplied opener instruction. Do not mix opener patterns.\n\nREQUIRED CONTENT BLOCKS (all must appear)\nTL;DR / Who this is for / Outcomes / Table of Contents / Setup /\nStep-by-step / Templates / Common mistakes / Metrics / Troubleshooting (if-then) /\nNext Steps (7-day plan) / Direct answer (2-3 sentences) / Decision tree (if-then) /\nFAQ (6-10 Q&As) / \"If you only do 3 things...\" / Further Reading (5 max)\n\nCALLOUTS (exact prefixes, anywhere in the body)\n- \"Rule:\"            6 or more\n- \"Common mistake:\"  6 or more\n- \"Insight:\"         4 or more\n\nPRACTICAL TOOLS (required)\n- 3 or more sections labelled \"Template: [Name]\"\n- 1 checklist\n- 1 worked example walked through end to end\n\nMETRICS (required)\n3-7 KPIs. Each one written as: KPI -> Target -> If low -> Action.\n\nHONESTY RULES\n- Do not invent statistics, studies, or quotes.\n- Do not claim results you cannot support.\n- If the topic has genuine disagreement, say so rather than flattening it.\n\nFAIL CONDITIONS\n- Any required block missing\n- Callout counts not met\n- Templates, checklist or worked example missing\n- Metrics missing the Target or Action legs\n- URLs outside Further Reading\n- Paragraphs longer than 4 lines\n\nReturn ONLY this JSON:\n{\n  \"article_title\": \"string\",\n  \"article\": \"string\"\n}\n",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        80,
+        -110
+      ],
+      "name": "Draft Article",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "Drive Folder URL",
+              "type": "string",
+              "value": "=https://drive.google.com/drive/folders/YOUR_DRIVE_FOLDER_ID"
+            },
+            {
+              "name": "Content Title",
+              "type": "string",
+              "value": "={{ $json.output.article_title }}"
+            },
+            {
+              "name": "Content in Markdown",
+              "type": "string",
+              "value": "={{ $json.output.article }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        640,
+        -110
+      ],
+      "name": "Set Output Fields"
+    },
+    {
+      "parameters": {
+        "mode": "markdownToHtml",
+        "markdown": "={{ $json['Content in Markdown'] }}",
+        "destinationKey": "Content in HTML",
+        "options": {
+          "emoji": true,
+          "requireSpaceBeforeHeadingText": true,
+          "noHeaderId": true,
+          "tables": true
+        }
+      },
+      "type": "n8n-nodes-base.markdown",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -210
+      ],
+      "name": "Markdown to HTML"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "Content in HTML",
+        "binaryPropertyName": "file",
+        "options": {
+          "fileName": "content.html"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -210
+      ],
+      "name": "HTML to File"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Drive only converts to a Google Doc if the upload is text/html.\n// convertToFile emits text/plain, so it is corrected here.\nconst item = $input.item;\nif (item.binary && item.binary.file) {\n  item.binary.file.mimeType = 'text/html';\n}\nreturn item;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -210
+      ],
+      "name": "Set HTML Mime Type",
+      "notesInFlow": true,
+      "notes": "text/plain -> text/html"
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "=placeholder",
+        "name": "={{ $json['Content Title'] }} {{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "={{ $json['Drive Folder URL'] }}"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        -10
+      ],
+      "name": "Create Empty Doc"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        -110
+      ],
+      "name": "Merge File + Doc ID"
+    },
+    {
+      "parameters": {
+        "amount": 0.5
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        -110
+      ],
+      "name": "Wait for Doc"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "changeFileContent": true,
+        "inputDataFieldName": "file",
+        "options": {
+          "fields": [
+            "webViewLink",
+            "id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1980,
+        -110
+      ],
+      "name": "Write HTML into Doc"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "redirect",
+        "redirectUrl": "={{ $json.webViewLink }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.3,
+      "position": [
+        2200,
+        -110
+      ],
+      "name": "Redirect to Doc"
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Resolve Tone & Opener",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Tone & Opener": {
+      "main": [
+        [
+          {
+            "node": "Generate Outline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outline Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Outline",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outline Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Generate Outline",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Outline": {
+      "main": [
+        [
+          {
+            "node": "Draft Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Model (web search)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Draft Article",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Draft Article",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Article Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Draft Article",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fixer Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Article Schema",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Article": {
+      "main": [
+        [
+          {
+            "node": "Set Output Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Output Fields": {
+      "main": [
+        [
+          {
+            "node": "Create Empty Doc",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Markdown to HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown to HTML": {
+      "main": [
+        [
+          {
+            "node": "HTML to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML to File": {
+      "main": [
+        [
+          {
+            "node": "Set HTML Mime Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set HTML Mime Type": {
+      "main": [
+        [
+          {
+            "node": "Merge File + Doc ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Empty Doc": {
+      "main": [
+        [
+          {
+            "node": "Merge File + Doc ID",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge File + Doc ID": {
+      "main": [
+        [
+          {
+            "node": "Wait for Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Doc": {
+      "main": [
+        [
+          {
+            "node": "Write HTML into Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write HTML into Doc": {
+      "main": [
+        [
+          {
+            "node": "Redirect to Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}
